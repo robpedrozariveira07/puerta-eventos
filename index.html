@@ -140,7 +140,9 @@ async function api(accion, extra) {
   const q = new URLSearchParams(Object.assign({ api: accion, pin: PIN }, extra || {}));
   const r = await fetch(API + '?' + q.toString(), { credentials: 'omit', redirect: 'follow', cache: 'no-store' });
   if (!r.ok) throw new Error('Error de conexión (' + r.status + ')');
-  return r.json();
+  const txt = await r.text();
+  try { return JSON.parse(txt); }
+  catch (e) { throw new Error('VERSION'); }
 }
 
 function pintarStats(d) {
@@ -160,7 +162,9 @@ async function login(pin) {
     $('scan').classList.remove('hide');
     iniciarCamara();
   } catch (e) {
-    $('loginMsg').textContent = 'Sin conexión. Revisa el internet e intenta de nuevo.';
+    $('loginMsg').textContent = e.message === 'VERSION'
+      ? 'El Sheet no tiene activa la versión del escáner. En Apps Script: Implementar > Administrar implementaciones > editar > Nueva versión.'
+      : 'Sin conexión. Revisa el internet e intenta de nuevo.';
   }
 }
 $('entrar').onclick = () => login($('pin').value.trim());
