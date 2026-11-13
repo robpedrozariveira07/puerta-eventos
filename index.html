@@ -97,6 +97,7 @@
   <div class="icon" id="rIcon"></div>
   <div class="titulo" id="rTitulo"></div>
   <div class="nombre" id="rNombre"></div>
+  <div class="detalle" id="rBailarina" style="margin-top:6px;font-weight:700"></div>
   <div class="asiento" id="rAsiento"></div>
   <div class="detalle" id="rDetalle"></div>
   <button class="btn light hide" id="rRegistrar">Registrar entrada</button>
@@ -249,6 +250,7 @@ function mostrar(d) {
   $('rIcon').textContent = ICON[d.tipo] || '✕';
   $('rTitulo').textContent = d.titulo || '';
   $('rNombre').textContent = d.nombre || '';
+  $('rBailarina').textContent = d.bailarina ? 'Bailarina: ' + d.bailarina : '';
   $('rAsiento').textContent = d.fila ? 'Fila ' + d.fila + ' · ' + d.numero : '';
   $('rDetalle').textContent = d.detalle || '';
   $('rRegistrar').classList.toggle('hide', d.tipo !== 'valido');
