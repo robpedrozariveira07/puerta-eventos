@@ -217,7 +217,7 @@ function extraerCodigo(texto) {
   texto = String(texto).trim();
   try {
     const u = new URL(texto);
-    const c = u.searchParams.get('c');
+    const c = u.searchParams.get('boleto') || u.searchParams.get('c');
     if (c) return c.toUpperCase();
   } catch (e) {}
   return texto.toUpperCase();
@@ -232,7 +232,7 @@ async function procesar(codigo) {
   $('hint').textContent = 'Consultando…';
   try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
   try {
-    const d = await api($('auto').checked ? 'registrar' : 'consultar', { c: codigo });
+    const d = await api($('auto').checked ? 'registrar' : 'consultar', { boleto: codigo });
     mostrar(d);
   } catch (e) {
     mostrar({ tipo: 'error', titulo: 'SIN CONEXIÓN', detalle: 'No se pudo consultar. Intenta de nuevo.' });
@@ -262,7 +262,7 @@ function mostrar(d) {
 
 async function registrarActual() {
   $('rRegistrar').disabled = true; $('rRegistrar').textContent = 'Registrando…';
-  try { mostrar(await api('registrar', { c: codigoActual })); }
+  try { mostrar(await api('registrar', { boleto: codigoActual })); }
   catch (e) { mostrar({ tipo: 'error', titulo: 'SIN CONEXIÓN', detalle: 'No se pudo registrar. Intenta de nuevo.' }); }
   $('rRegistrar').disabled = false; $('rRegistrar').textContent = 'Registrar entrada';
 }
