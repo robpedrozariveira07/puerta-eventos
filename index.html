@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1A1414">
+<meta name="robots" content="noindex">
+<title>Control de acceso</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+  :root { --wine:#5A1E1E; --terra:#D9765A; --cream:#F3EAE2; --dark:#1A1414; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--dark); color:#fff;
+    font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  button { font:inherit; cursor:pointer; }
+  .hide { display:none !important; }
+
+  /* Login */
+  #eventos { min-height:100%; padding:40px 20px; text-align:center; }
+  #eventos h1 { font-weight:300; letter-spacing:4px; font-size:20px; margin:20px 0 0; }
+  .evento { display:block; width:100%; max-width:420px; margin:0 auto 12px; padding:18px; border:0; border-radius:14px;
+    background:var(--wine); color:#fff; text-align:left; }
+  .evento b { display:block; font-size:20px; } .evento span { font-size:14px; opacity:.8; }
+  #login { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
+  #login h1 { font-weight:600; letter-spacing:1px; font-size:26px; margin:0; }
+  #login input { font-size:28px; padding:14px; width:200px; text-align:center; border-radius:12px; border:0; letter-spacing:6px; }
+  .btn { display:block; margin:16px auto 0; font-size:20px; padding:16px 28px; border:0; border-radius:12px; background:var(--terra); color:#fff; font-weight:700; min-width:220px; }
+  .btn.light { background:#fff; color:var(--dark); }
+  .msg { margin-top:14px; color:#FFB4A8; min-height:22px; }
+
+  /* Escáner */
+  #scan { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px; background:#000; }
+  header .t { font-size:13px; letter-spacing:2px; opacity:.8; }
+  header .n { font-size:20px; font-weight:700; }
+  .camwrap { position:relative; flex:1; overflow:hidden; background:#000; }
+  video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .frame { position:absolute; left:50%; top:50%; width:64vmin; height:64vmin; transform:translate(-50%,-50%);
+    border:3px solid rgba(255,255,255,.85); border-radius:18px; box-shadow:0 0 0 100vmax rgba(0,0,0,.35); }
+  .hint { position:absolute; bottom:16px; left:0; right:0; text-align:center; font-size:15px; opacity:.9; }
+  footer { background:#000; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; align-items:center; }
+  footer input { flex:1; font-size:16px; padding:10px; border-radius:8px; border:0; text-transform:uppercase; min-width:0; }
+  footer button { padding:10px 14px; border:0; border-radius:8px; background:#333; color:#fff; }
+  .switch { display:flex; align-items:center; gap:6px; font-size:13px; white-space:nowrap; }
+
+  /* Resultado */
+  #res { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
+  #res.valido { background:#2E7D5B; } #res.registrado { background:#1E6B47; }
+  #res.repetido { background:#C98A00; } #res.invalido, #res.error { background:#B3261E; }
+  #res .titulo { font-size:34px; font-weight:800; letter-spacing:1px; }
+  #res .nombre { font-size:28px; font-weight:700; margin-top:18px; }
+  #res .asiento { font-size:56px; font-weight:800; margin:10px 0; }
+  #res .detalle { font-size:18px; opacity:.95; }
+  #res .icon { font-size:72px; line-height:1; }
+</style>
+</head>
+<body>
+
+<!-- 0. Evento -->
+<section id="eventos" class="hide">
+  <h1>CONTROL DE ACCESO</h1>
+  <div style="margin:6px 0 22px;opacity:.85">Elige el evento</div>
+  <div id="listaEventos"></div>
+</section>
+
+<!-- 1. PIN -->
+<section id="login" class="hide">
+  <h1 id="evNombre"></h1>
+  <div id="evDetalle" style="opacity:.7;font-size:14px;margin:4px 0 26px"></div>
+  <div style="margin-bottom:10px;opacity:.85">PIN del staff</div>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
+  <button class="btn" id="entrar">Entrar</button>
+  <div class="msg" id="loginMsg"></div>
+  <button id="cambiar" class="hide" style="margin-top:22px;background:none;border:0;color:#bbb;text-decoration:underline">Cambiar de evento</button>
+</section>
+
+<!-- 2. Escáner -->
+<section id="scan" class="hide">
+  <header>
+    <div><div class="t"><span id="scanEvento"></span> · INGRESARON</div><div class="n" id="stats">–</div></div>
+    <label class="switch"><input type="checkbox" id="auto" checked> Registrar al escanear</label>
+  </header>
+  <div class="camwrap">
+    <video id="video" playsinline muted></video>
+    <div class="frame"></div>
+    <div class="hint" id="hint">Apunta al código QR del boleto</div>
+  </div>
+  <footer>
+    <input id="manual" placeholder="Código manual" autocomplete="off">
+    <button id="buscar">Buscar</button>
+    <button id="salir" title="Cerrar sesión">Salir</button>
+  </footer>
+</section>
+
+<!-- 3. Resultado -->
+<section id="res" class="hide">
+  <div class="icon" id="rIcon"></div>
+  <div class="titulo" id="rTitulo"></div>
+  <div class="nombre" id="rNombre"></div>
+  <div class="asiento" id="rAsiento"></div>
+  <div class="detalle" id="rDetalle"></div>
+  <button class="btn light hide" id="rRegistrar">Registrar entrada</button>
+  <button class="btn" id="rSiguiente" style="background:rgba(0,0,0,.35)">Siguiente</button>
+</section>
+
+<script>
+/* ================================================================
+ * EVENTOS: agrega uno por evento. "api" es la URL de la app web de
+ * Apps Script de ese evento (la que termina en /exec).
+ * Link directo a un evento: ...github.io/<repo>/?evento=<id>
+ * ================================================================ */
+const EVENTOS = [
+  {
+    id: 'una-vez-mas-juntas',
+    nombre: 'Una vez más juntas',
+    detalle: 'Ánima Terra · 19 dic 2026 · Marketeatro',
+    api: 'https://script.google.com/macros/s/AKfycbxi5ZBs9LIeGBM6qu3kv-6wyE10SjpUQmT6I-ZmLX-__s2QpXwZTgy8SzsG2qXcvH_7/exec',
+    activo: true,
+  },
+  // Ejemplo para otro evento (cambia activo a true cuando esté listo):
+  // { id: 'posada-2026', nombre: 'Posada', detalle: 'Fecha · Lugar', api: 'https://script.google.com/macros/s/.../exec', activo: false },
+];
+const ACTIVOS = EVENTOS.filter(e => e.activo);
+let EV = null, API = '';
+
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+let PIN = '';
+const kPin = () => 'pin:' + (EV ? EV.id : '');
+let stream = null, scanning = false, busy = false, lastCode = '', lastTime = 0, codigoActual = '';
+let detector = null;
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+async function api(accion, extra) {
+  const q = new URLSearchParams(Object.assign({ api: accion, pin: PIN }, extra || {}));
+  const r = await fetch(API + '?' + q.toString(), { credentials: 'omit', redirect: 'follow', cache: 'no-store' });
+  if (!r.ok) throw new Error('Error de conexión (' + r.status + ')');
+  return r.json();
+}
+
+function pintarStats(d) {
+  if (d && typeof d.ingresaron === 'number') $('stats').textContent = d.ingresaron + ' / ' + d.vendidos;
+}
+
+/* ---------- Login ---------- */
+async function login(pin) {
+  $('loginMsg').textContent = 'Verificando…';
+  PIN = pin;
+  try {
+    const d = await api('login');
+    if (d.error) { $('loginMsg').textContent = d.error; store.del(kPin()); return; }
+    store.set(kPin(), pin);
+    pintarStats(d);
+    $('login').classList.add('hide');
+    $('scan').classList.remove('hide');
+    iniciarCamara();
+  } catch (e) {
+    $('loginMsg').textContent = 'Sin conexión. Revisa el internet e intenta de nuevo.';
+  }
+}
+$('entrar').onclick = () => login($('pin').value.trim());
+$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') login($('pin').value.trim()); });
+$('salir').onclick = () => { store.del(kPin()); store.del('eventoPuerta'); location.href = location.pathname; };
+
+/* ---------- Cámara ---------- */
+async function iniciarCamara() {
+  try {
+    if ('BarcodeDetector' in window) {
+      const f = await BarcodeDetector.getSupportedFormats();
+      if (f.includes('qr_code')) detector = new BarcodeDetector({ formats: ['qr_code'] });
+    }
+  } catch (e) { detector = null; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    $('video').srcObject = stream;
+    await $('video').play();
+    scanning = true;
+    requestAnimationFrame(tick);
+  } catch (e) {
+    $('hint').textContent = 'No se pudo abrir la cámara. Da permiso de cámara a esta página o usa el código manual.';
+  }
+}
+
+async function tick() {
+  if (!scanning) return;
+  const v = $('video');
+  if (!busy && v.readyState === v.HAVE_ENOUGH_DATA) {
+    let texto = '';
+    try {
+      if (detector) {
+        const codes = await detector.detect(v);
+        if (codes.length) texto = codes[0].rawValue;
+      } else if (window.jsQR) {
+        const w = 480, h = Math.round(v.videoHeight * 480 / v.videoWidth);
+        canvas.width = w; canvas.height = h;
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        const r = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
+        if (r) texto = r.data;
+      }
+    } catch (e) {}
+    if (texto) procesar(extraerCodigo(texto));
+  }
+  setTimeout(() => requestAnimationFrame(tick), 120);
+}
+
+function extraerCodigo(texto) {
+  texto = String(texto).trim();
+  try {
+    const u = new URL(texto);
+    const c = u.searchParams.get('c');
+    if (c) return c.toUpperCase();
+  } catch (e) {}
+  return texto.toUpperCase();
+}
+
+/* ---------- Procesar boleto ---------- */
+async function procesar(codigo) {
+  if (!codigo || busy) return;
+  const now = Date.now();
+  if (codigo === lastCode && now - lastTime < 4000) return;
+  lastCode = codigo; lastTime = now; busy = true; codigoActual = codigo;
+  $('hint').textContent = 'Consultando…';
+  try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
+  try {
+    const d = await api($('auto').checked ? 'registrar' : 'consultar', { c: codigo });
+    mostrar(d);
+  } catch (e) {
+    mostrar({ tipo: 'error', titulo: 'SIN CONEXIÓN', detalle: 'No se pudo consultar. Intenta de nuevo.' });
+  }
+}
+
+const ICON = { valido: '✓', registrado: '✓', repetido: '!', invalido: '✕', error: '✕' };
+let autoCerrar = null;
+function mostrar(d) {
+  if (d.error && !d.tipo) d = { tipo: 'error', titulo: d.error === 'PIN incorrecto' ? 'PIN INCORRECTO' : 'ERROR', detalle: d.error };
+  pintarStats(d);
+  const r = $('res');
+  r.className = d.tipo || 'error';
+  $('rIcon').textContent = ICON[d.tipo] || '✕';
+  $('rTitulo').textContent = d.titulo || '';
+  $('rNombre').textContent = d.nombre || '';
+  $('rAsiento').textContent = d.fila ? 'Fila ' + d.fila + ' · ' + d.numero : '';
+  $('rDetalle').textContent = d.detalle || '';
+  $('rRegistrar').classList.toggle('hide', d.tipo !== 'valido');
+  try {
+    if (d.tipo === 'repetido' || d.tipo === 'invalido' || d.tipo === 'error') navigator.vibrate && navigator.vibrate([200, 100, 200]);
+  } catch (e) {}
+  clearTimeout(autoCerrar);
+  if (d.tipo === 'registrado') autoCerrar = setTimeout(siguiente, 2500);
+  if (d.error === 'PIN incorrecto') { store.del(kPin()); setTimeout(() => location.reload(), 1500); }
+}
+
+async function registrarActual() {
+  $('rRegistrar').disabled = true; $('rRegistrar').textContent = 'Registrando…';
+  try { mostrar(await api('registrar', { c: codigoActual })); }
+  catch (e) { mostrar({ tipo: 'error', titulo: 'SIN CONEXIÓN', detalle: 'No se pudo registrar. Intenta de nuevo.' }); }
+  $('rRegistrar').disabled = false; $('rRegistrar').textContent = 'Registrar entrada';
+}
+
+function siguiente() {
+  clearTimeout(autoCerrar);
+  $('res').className = 'hide';
+  $('hint').textContent = 'Apunta al código QR del boleto';
+  $('manual').value = '';
+  busy = false;
+}
+
+$('rRegistrar').onclick = registrarActual;
+$('rSiguiente').onclick = siguiente;
+$('buscar').onclick = () => { lastCode = ''; procesar($('manual').value.trim().toUpperCase()); };
+$('manual').addEventListener('keydown', e => { if (e.key === 'Enter') $('buscar').onclick(); });
+
+/* Mantener la pantalla encendida mientras se escanea (si el navegador lo permite) */
+async function noDormir() { try { await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') noDormir(); });
+noDormir();
+
+/* ---------- Elegir evento ---------- */
+function elegir(ev) {
+  EV = ev; API = ev.api;
+  store.set('eventoPuerta', ev.id);
+  document.title = 'Puerta · ' + ev.nombre;
+  $('evNombre').textContent = ev.nombre;
+  $('evDetalle').textContent = ev.detalle || '';
+  $('scanEvento').textContent = ev.nombre.toUpperCase();
+  $('eventos').classList.add('hide');
+  $('login').classList.remove('hide');
+  $('cambiar').classList.toggle('hide', ACTIVOS.length < 2);
+  PIN = store.get(kPin());
+  if (PIN) login(PIN); else $('pin').focus();
+}
+function mostrarEventos() {
+  const box = $('listaEventos');
+  box.innerHTML = '';
+  ACTIVOS.forEach(ev => {
+    const b = document.createElement('button');
+    b.className = 'evento';
+    b.innerHTML = '<b></b><span></span>';
+    b.querySelector('b').textContent = ev.nombre;
+    b.querySelector('span').textContent = ev.detalle || '';
+    b.onclick = () => elegir(ev);
+    box.appendChild(b);
+  });
+  $('login').classList.add('hide');
+  $('eventos').classList.remove('hide');
+}
+$('cambiar').onclick = () => { store.del('eventoPuerta'); history.replaceState(null, '', location.pathname); mostrarEventos(); };
+
+(function inicio() {
+  const pedido = new URLSearchParams(location.search).get('evento') || store.get('eventoPuerta');
+  const ev = ACTIVOS.find(e => e.id === pedido) || (ACTIVOS.length === 1 ? ACTIVOS[0] : null);
+  if (ev) elegir(ev); else mostrarEventos();
+})();
+</script>
+</body>
+</html>
